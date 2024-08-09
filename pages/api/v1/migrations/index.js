@@ -6,9 +6,7 @@ async function migrations(request, response) {
   const allowedMethods = ["GET", "POST"];
 
   if (!allowedMethods.includes(request.method)) {
-    return response.status(405).json({
-      error: `method "${request.method}" not allowed`,
-    });
+    return response.status(405).end();
   }
 
   let dbClient;
