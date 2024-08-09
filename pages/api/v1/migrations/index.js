@@ -3,45 +3,51 @@ import migrationRunner from "node-pg-migrate";
 import { join } from "path";
 
 async function migrations(request, response) {
-  const dbClient = await database.getNewDbClient();
+  const allowedMethods = ["GET", "POST"];
 
-  console.log("test preview deployment");
-
-  const defaultMigrationConfig = {
-    dbClient: dbClient,
-    dryRun: true,
-    dir: join("infra", "migrations"),
-    direction: "up",
-    verbose: true,
-    migrationsTable: "pgmigrations",
-  };
-
-  if (request.method === "GET") {
-    const pendingMigrations = await migrationRunner(defaultMigrationConfig);
-
-    await dbClient.end();
-
-    return response.status(200).json(pendingMigrations);
+  if (!allowedMethods.includes(request.method)) {
+    return response.status(405).json({
+      error: `method "${request.method}" not allowed`,
+    });
   }
 
-  if (request.method === "POST") {
-    const executedMigrations = await migrationRunner({
-      ...defaultMigrationConfig,
-      dryRun: false,
-    });
+  let dbClient;
+  try {
+    dbClient = await database.getNewDbClient();
 
-    await dbClient.end();
+    const defaultMigrationConfig = {
+      dbClient: dbClient,
+      dryRun: true,
+      dir: join("infra", "migrations"),
+      direction: "up",
+      verbose: true,
+      migrationsTable: "pgmigrations",
+    };
 
-    if (migrations.length > 0) {
-      return response.status(201).json(executedMigrations);
+    if (request.method === "GET") {
+      const pendingMigrations = await migrationRunner(defaultMigrationConfig);
+
+      return response.status(200).json(pendingMigrations);
     }
 
-    return response.status(200).end();
+    if (request.method === "POST") {
+      const executedMigrations = await migrationRunner({
+        ...defaultMigrationConfig,
+        dryRun: false,
+      });
+
+      if (migrations.length > 0) {
+        return response.status(201).json(executedMigrations);
+      }
+
+      return response.status(200).end();
+    }
+  } catch (error) {
+    console.error(error);
+    throw error;
+  } finally {
+    await dbClient.end();
   }
-
-  await dbClient.end();
-
-  return response.status(405).end();
 }
 
 export default migrations;
